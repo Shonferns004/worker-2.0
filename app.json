@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "HireKar Worker",
+    "slug": "worker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "scheme": "worker",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#a4db5d",
+        "foregroundImage": "./src/assets/images/icon.png",
+        "backgroundImage": "./src/assets/images/icon.png",
+        "monochromeImage": "./src/assets/images/icon.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.shawnferns2004.worker"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./src/assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/images/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#a4db5d"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      [
+        "@rnmapbox/maps",
+        {
+          "MAPBOX_DOWNLOADS_TOKEN": "sk.eyJ1Ijoic2hhd25mZXJuczAwNDI2IiwiYSI6ImNtbG5ldHBocDBxbWgzZHM5NWZrbzVzZGcifQ.FhFEjHw-UQ32OtcMc7tuGA"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "da6a193b-b717-4a1c-896d-cc673a320df6"
+      }
+    }
+  }
+}

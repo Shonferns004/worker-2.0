@@ -1,0 +1,9 @@
+const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    throw new Error(error.message);
+  }
+};
+
+eas build --platform android --profile development
+npx expo prebuild --clean
