@@ -9,15 +9,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+
 import { supabase } from "@/config/supabase";
 import { useUser } from "@/context/UserContext";
-
-const PRIMARY = "#a1e633";
+import { useI18n } from "@/i18n/I18nProvider";
+import { Language } from "@/i18n/translations";
 const DARK = "#0f172a";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user } = useUser();
+  const { language, setLanguage, t } = useI18n();
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -26,32 +28,15 @@ export default function ProfileScreen() {
   const actions = [
     {
       icon: "payments" as const,
-      title: "Earnings",
-      subtitle: "Track payouts, balance, and completed work income.",
+      title: t("profile.earningsTitle"),
+      subtitle: t("profile.earningsSubtitle"),
       onPress: () => router.push("/earnings"),
     },
     {
       icon: "history" as const,
-      title: "Job History",
-      subtitle: "Look back at completed and cancelled service requests.",
+      title: t("profile.historyTitle"),
+      subtitle: t("profile.historySubtitle"),
       onPress: () => router.push("/history"),
-    },
-    {
-      icon: "school" as const,
-      title: "Courses",
-      subtitle: "Keep building your skills and unlock more XP.",
-      onPress: () => router.push("/(app)/(tabs)/learn"),
-    },
-  ];
-
-  const profileStats = [
-    {
-      label: "XP",
-      value: `${(user as any)?.skill_points ?? 0}`,
-    },
-    {
-      label: "Phone",
-      value: user?.phone ?? "Not available",
     },
   ];
 
@@ -65,7 +50,7 @@ export default function ProfileScreen() {
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={22} color={DARK} />
           </Pressable>
-          <Text style={styles.topTitle}>Profile</Text>
+          <Text style={styles.topTitle}>{t("common.profile")}</Text>
           <View style={styles.topSpacer} />
         </View>
 
@@ -77,10 +62,8 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
-          <Text style={styles.name}>{user?.name ?? "Worker"}</Text>
-          <Text style={styles.subtitle}>
-            Manage your account, earnings, and work tools from one place.
-          </Text>
+          <Text style={styles.name}>{user?.name ?? t("home.workerFallback")}</Text>
+          <Text style={styles.subtitle}>{t("profile.heroSubtitle")}</Text>
 
           <View style={styles.xpPill}>
             <MaterialIcons name="workspace-premium" size={16} color="#365314" />
@@ -89,7 +72,42 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Workspace</Text>
+          <Text style={styles.sectionTitle}>{t("common.language")}</Text>
+          <View style={styles.languageRow}>
+            {([
+              ["en", t("common.english")],
+              ["hi", t("common.hindi")],
+              ["bn", t("common.bengali")],
+              ["ta", t("common.tamil")],
+              ["te", t("common.telugu")],
+              ["mr", t("common.marathi")],
+            ] as [Language, string][]).map(([code, label]) => {
+              const active = language === code;
+              return (
+                <Pressable
+                  key={code}
+                  style={[
+                    styles.languageChip,
+                    active && styles.languageChipActive,
+                  ]}
+                  onPress={() => setLanguage(code)}
+                >
+                  <Text
+                    style={[
+                      styles.languageChipText,
+                      active && styles.languageChipTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.workspace")}</Text>
           {actions.map((action) => (
             <Pressable key={action.title} style={styles.card} onPress={action.onPress}>
               <View style={styles.cardIcon}>
@@ -106,7 +124,7 @@ export default function ProfileScreen() {
 
         <Pressable style={styles.logoutButton} onPress={signOut}>
           <MaterialIcons name="logout" size={18} color="#dc2626" />
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>{t("common.logout")}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -208,31 +226,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#365314",
   },
-  statsRow: {
-    width: "100%",
-    marginTop: 20,
-    gap: 10,
-  },
-  statCard: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#94a3b8",
-    letterSpacing: 0.8,
-  },
-  statValue: {
-    marginTop: 6,
-    fontSize: 15,
-    fontWeight: "800",
-    color: DARK,
-  },
   section: {
     gap: 14,
   },
@@ -241,6 +234,30 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: DARK,
     marginLeft: 4,
+  },
+  languageRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  languageChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff",
+  },
+  languageChipActive: {
+    borderColor: "#84cc16",
+    backgroundColor: "#ecfccb",
+  },
+  languageChipText: {
+    fontWeight: "700",
+    color: "#475569",
+  },
+  languageChipTextActive: {
+    color: "#365314",
   },
   card: {
     flexDirection: "row",
@@ -262,31 +279,32 @@ const styles = StyleSheet.create({
   },
   cardCopy: {
     flex: 1,
+    gap: 4,
   },
   cardTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: DARK,
   },
   cardSubtitle: {
-    marginTop: 4,
     color: "#64748b",
-    lineHeight: 19,
+    lineHeight: 20,
   },
   logoutButton: {
-    marginTop: 6,
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
     backgroundColor: "#ffffff",
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#fecaca",
     paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
   },
   logoutText: {
-    color: "#dc2626",
+    fontSize: 15,
     fontWeight: "800",
+    color: "#dc2626",
   },
 });

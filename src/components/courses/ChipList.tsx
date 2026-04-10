@@ -1,14 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useI18n } from "@/i18n/I18nProvider";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  Easing
 } from "react-native-reanimated";
 
+const copyMap = {
+  en: { startLearning: "Start Learning" },
+  hi: { startLearning: "सीखना शुरू करें" },
+  bn: { startLearning: "শেখা শুরু করুন" },
+  ta: { startLearning: "கற்றலை தொடங்கு" },
+  te: { startLearning: "నేర్చుకోవడం ప్రారంభించండి" },
+  mr: { startLearning: "शिकायला सुरुवात करा" },
+} as const;
 
 export function ListCourse({
   image,
@@ -18,24 +26,22 @@ export function ListCourse({
   onStart,
   isLoading,
 }: any) {
+  const { language } = useI18n();
+  const copy = useMemo(() => copyMap[language] ?? copyMap.en, [language]);
   const opacity = useSharedValue(0.3);
-    
-    useEffect(() => {
-      opacity.value = withRepeat(
-        withTiming(1, { duration: 1000 }),
-        -1,
-        true
-      );
-    }, []);
-    
-    const style = useAnimatedStyle(() => ({
-      opacity: opacity.value,
-    }));
-    
-      if (isLoading) {
-        return <Animated.View style={[styles.skeleton, style]} />;
-      }
-  
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 1000 }), -1, true);
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  if (isLoading) {
+    return <Animated.View style={[styles.skeleton, style]} />;
+  }
+
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.8}>
       <Image source={{ uri: image }} style={styles.image} />
@@ -60,14 +66,13 @@ export function ListCourse({
             activeOpacity={0.8}
           >
             <Ionicons name="play" size={12} color="#161b0e" />
-            <Text style={styles.startText}>Start Learning</Text>
+            <Text style={styles.startText}>{copy.startLearning}</Text>
           </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
-
 
 const PRIMARY = "#a1e633";
 const DARK = "#161b0e";
@@ -80,43 +85,36 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 24,
   },
-
   image: {
     width: 96,
     height: 96,
     borderRadius: 16,
   },
-
   content: {
     flex: 1,
     gap: 6,
     justifyContent: "space-between",
   },
-
   title: {
     fontSize: 16,
     fontWeight: "800",
     color: DARK,
   },
-
   meta: {
     fontSize: 10,
     fontWeight: "700",
     color: `${DARK}66`,
   },
-
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-
   duration: {
     fontSize: 10,
     fontWeight: "700",
     color: `${DARK}66`,
   },
-
   startButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -126,18 +124,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
   },
-
   startText: {
     fontSize: 10,
     fontWeight: "800",
     color: DARK,
   },
   skeleton: {
-   flexDirection: "row",
+    flexDirection: "row",
     gap: 16,
     backgroundColor: "#eee",
     padding: 12,
     borderRadius: 24,
-    height:100
+    height: 100,
   },
 });

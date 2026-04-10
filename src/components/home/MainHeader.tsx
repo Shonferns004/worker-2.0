@@ -1,57 +1,57 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { router } from "expo-router";
+
 import { useWorkerStore } from "@/store/workerStore";
 import { supabase } from "@/config/supabase";
-import * as Location from "expo-location";
 import { useUser } from "@/context/UserContext";
-import { toogleOndutyButton } from "@/service/apiService";
-import { router } from "expo-router";
-import { getWorkerJobHistory } from "@/service/apiService";
+import { useI18n } from "@/i18n/I18nProvider";
+import {
+  ensureBackgroundLocationTracking,
+  stopBackgroundLocationTracking,
+} from "@/service/backgroundLocation";
+import { getWorkerJobHistory, toogleOndutyButton } from "@/service/apiService";
 
 const PRIMARY = "#a1e633";
 
 const MainHeader = () => {
   const { setOnDuty, onDuty, setLocation } = useWorkerStore();
   const { user, refreshUser } = useUser();
+  const { t } = useI18n();
 
   const [loading, setLoading] = useState(false);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const channelRef = useRef<any>(null);
-
-  /* =========================================================
-     INITIAL LOAD + REALTIME SYNC
-  ========================================================= */
 
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
       const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user || !isMounted) return;
+      const authUser = userData?.user;
+      if (!authUser || !isMounted) return;
 
-      // initial load
       const { data } = await supabase
         .from("workers")
         .select("on_duty")
-        .eq("id", user.id) // make sure your schema matches this
+        .eq("id", authUser.id)
         .single();
 
       if (data && isMounted) {
         setOnDuty(data.on_duty);
       }
 
-      // realtime subscription
       channelRef.current = supabase
-        .channel(`worker-duty-${user.id}`)
+        .channel(`worker-duty-${authUser.id}`)
         .on(
           "postgres_changes",
           {
             event: "UPDATE",
             schema: "public",
             table: "workers",
-            filter: `id=eq.${user.id}`,
+            filter: `id=eq.${authUser.id}`,
           },
           (payload) => {
             setOnDuty(payload.new.on_duty);
@@ -83,7 +83,9 @@ const MainHeader = () => {
         const total = jobs
           .filter((job: any) => {
             if (job.status !== "COMPLETED") return false;
-            const completedAt = new Date(job.completed_at ?? job.updated_at ?? job.created_at);
+            const completedAt = new Date(
+              job.completed_at ?? job.updated_at ?? job.created_at,
+            );
             return completedAt.toDateString() === today.toDateString();
           })
           .reduce(
@@ -107,35 +109,27 @@ const MainHeader = () => {
     };
   }, []);
 
-  /* =========================================================
-     DUTY TOGGLE (SAFE + OPTIMISTIC)
-  ========================================================= */
-
   const handleToggle = async () => {
-    if (loading) return; // prevent rapid double taps
+    if (loading) return;
     setLoading(true);
 
     const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
+    const authUser = userData?.user;
 
-    if (!user) {
+    if (!authUser) {
       setLoading(false);
       return;
     }
 
     const newState = !onDuty;
-
-    // optimistic UI update
     setOnDuty(newState);
 
     try {
       if (newState) {
-        // going ON duty
-
         const { status } = await Location.requestForegroundPermissionsAsync();
 
         if (status !== "granted") {
-          setOnDuty(false); // revert
+          setOnDuty(false);
           setLoading(false);
           return;
         }
@@ -146,7 +140,6 @@ const MainHeader = () => {
 
         const { latitude, longitude, heading } = location.coords;
 
-        // update local store immediately
         setLocation({
           latitude,
           longitude,
@@ -162,124 +155,129 @@ const MainHeader = () => {
             longitude,
             heading,
           })
-          .eq("id", user.id);
+          .eq("id", authUser.id);
 
+        await ensureBackgroundLocationTracking();
         await toogleOndutyButton(true);
-
       } else {
-        // going OFF duty
+        await stopBackgroundLocationTracking();
         await supabase
           .from("workers")
           .update({ on_duty: false })
-          .eq("id", user.id);
+          .eq("id", authUser.id);
 
         await toogleOndutyButton(false);
       }
 
       await refreshUser();
     } catch {
-      // revert on failure
       setOnDuty(!newState);
     }
 
     setLoading(false);
   };
 
-  /* ========================================================= */
-
   return (
     <View style={styles.header}>
       <View style={styles.heroCard}>
         <View style={styles.headerRow}>
-        <Pressable
-          style={styles.profileRow}
-          onPress={() => router.push("/profile")}
-        >
-          <View style={styles.avatarWrapper}>
-            <Text style={styles.avatarText}>
-              {(user?.name ?? "W").slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
-
-          <View>
-            <Text style={styles.greeting}>GOOD MORNING</Text>
-            <Text style={styles.name}>{user?.name ?? "Worker"}</Text>
-            <Text style={styles.serviceType}>
-              {(user as any)?.service_type
-                ? String((user as any).service_type).toUpperCase()
-                : "SERVICE PARTNER"}
-            </Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.earningsPanel}>
-          <Text style={styles.smallLabel}>TODAY'S EARNINGS</Text>
-          <Text style={styles.smallValue}>₹ {todayEarnings}</Text>
-          <Text style={styles.tinyValue}>{(user as any)?.skill_points ?? 0} XP</Text>
-        </View>
-      </View>
-
-      {/* DUTY CARD */}
-      <View style={styles.dutyCard}>
-        <View style={styles.dutyLeft}>
           <Pressable
-            onPress={handleToggle}
-            disabled={loading}
-            style={[
-              styles.toggleShell,
-              onDuty ? styles.toggleShellActive : styles.toggleShellInactive,
-              loading && styles.toggleDisabled,
-            ]}
+            style={styles.profileRow}
+            onPress={() => router.push("/profile")}
           >
-            <View
-              style={[
-                styles.toggleThumb,
-                onDuty ? styles.toggleThumbActive : styles.toggleThumbInactive,
-              ]}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#0f172a" />
-              ) : (
-                <MaterialIcons
-                  name={onDuty ? "check" : "power-settings-new"}
-                  size={18}
-                  color="#0f172a"
-                />
-              )}
-            </View>
-          </Pressable>
-
-          <View>
-            <View style={styles.statusRow}>
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: onDuty ? PRIMARY : "#cbd5e1" },
-                ]}
-              />
-              <Text style={styles.dutyText}>
-                {onDuty ? "On Duty" : "Offline"}
+            <View style={styles.avatarWrapper}>
+              <Text style={styles.avatarText}>
+                {(user?.name ?? "W").slice(0, 1).toUpperCase()}
               </Text>
             </View>
 
-            <Text style={styles.dutySub}>
-              {onDuty ? "ACCEPTING NEW TASKS" : "NOT ACCEPTING JOBS"}
+            <View>
+              <Text style={styles.greeting}>
+                {t("home.goodMorning").toUpperCase()}
+              </Text>
+              <Text style={styles.name}>
+                {user?.name ?? t("home.workerFallback")}
+              </Text>
+              <Text style={styles.serviceType}>
+                {(user as any)?.service_type
+                  ? String((user as any).service_type).toUpperCase()
+                  : t("home.servicePartner").toUpperCase()}
+              </Text>
+            </View>
+          </Pressable>
+
+          <View style={styles.earningsPanel}>
+            <Text style={styles.smallLabel}>
+              {t("home.todaysEarnings").toUpperCase()}
+            </Text>
+            <Text style={styles.smallValue}>{"\u20B9"} {todayEarnings}</Text>
+            <Text style={styles.tinyValue}>
+              {(user as any)?.skill_points ?? 0} XP
             </Text>
           </View>
         </View>
 
-        <View style={styles.iconBox}>
-          <MaterialIcons name="sensors" size={22} color={PRIMARY} />
+        <View style={styles.dutyCard}>
+          <View style={styles.dutyLeft}>
+            <Pressable
+              onPress={handleToggle}
+              disabled={loading}
+              style={[
+                styles.toggleShell,
+                onDuty ? styles.toggleShellActive : styles.toggleShellInactive,
+                loading && styles.toggleDisabled,
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleThumb,
+                  onDuty ? styles.toggleThumbActive : styles.toggleThumbInactive,
+                ]}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#0f172a" />
+                ) : (
+                  <MaterialIcons
+                    name={onDuty ? "check" : "power-settings-new"}
+                    size={18}
+                    color="#0f172a"
+                  />
+                )}
+              </View>
+            </Pressable>
+
+            <View>
+              <View style={styles.statusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: onDuty ? PRIMARY : "#cbd5e1" },
+                  ]}
+                />
+                <Text style={styles.dutyText}>
+                  {onDuty ? t("home.onDuty") : t("home.offline")}
+                </Text>
+              </View>
+
+              <Text style={styles.dutySub}>
+                {(onDuty
+                  ? t("home.acceptingTasks")
+                  : t("home.notAcceptingJobs")
+                ).toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.iconBox}>
+            <MaterialIcons name="sensors" size={22} color={PRIMARY} />
+          </View>
         </View>
-      </View>
       </View>
     </View>
   );
 };
 
 export default MainHeader;
-
-/* ========================================================= */
 
 const styles = StyleSheet.create({
   header: {
@@ -298,21 +296,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
-
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 18,
   },
-
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
     marginRight: 14,
   },
-
   avatarWrapper: {
     width: 56,
     height: 56,
@@ -324,20 +319,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   avatarText: {
     color: "#365314",
     fontWeight: "900",
     fontSize: 22,
   },
-
   greeting: {
     fontSize: 10,
     fontWeight: "800",
     color: "#94a3b8",
     letterSpacing: 1.2,
   },
-
   name: {
     marginTop: 2,
     fontSize: 22,
@@ -361,14 +353,12 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
     alignItems: "flex-end",
   },
-
   smallLabel: {
     fontSize: 9,
     fontWeight: "800",
     color: "#94a3b8",
     letterSpacing: 0.8,
   },
-
   smallValue: {
     marginTop: 6,
     fontSize: 18,
@@ -381,7 +371,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#64748b",
   },
-
   dutyCard: {
     paddingHorizontal: 18,
     paddingVertical: 18,
@@ -393,7 +382,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
-
   dutyLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -430,12 +418,10 @@ const styles = StyleSheet.create({
   toggleDisabled: {
     opacity: 0.7,
   },
-
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
   },
-
   statusDot: {
     width: 8,
     height: 8,
@@ -443,13 +429,11 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     marginRight: 6,
   },
-
   dutyText: {
     fontSize: 17,
     fontWeight: "800",
     color: "#0f172a",
   },
-
   dutySub: {
     fontSize: 10,
     color: "#94a3b8",
@@ -457,7 +441,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     letterSpacing: 0.6,
   },
-
   iconBox: {
     width: 44,
     height: 44,

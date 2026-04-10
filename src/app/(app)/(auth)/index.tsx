@@ -1,31 +1,36 @@
 import { supabase } from "@/config/supabase";
+import { useI18n } from "@/i18n/I18nProvider";
 import { router } from "expo-router";
-import React, { useState, useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
-  View,
+  Alert,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Platform,
-  Alert,
+  View,
 } from "react-native";
 
 export default function PhoneAuthScreen() {
+  const { t } = useI18n();
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
 
-  const otpRefs = Array.from({ length: 6 }, () =>
-    useRef<TextInput>(null)
-  );
+  const otpRef0 = useRef<TextInput>(null);
+  const otpRef1 = useRef<TextInput>(null);
+  const otpRef2 = useRef<TextInput>(null);
+  const otpRef3 = useRef<TextInput>(null);
+  const otpRef4 = useRef<TextInput>(null);
+  const otpRef5 = useRef<TextInput>(null);
+  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
 
-  /* ================= SEND OTP ================= */
   const sendOtp = async () => {
     if (phone.length !== 10) {
-      Alert.alert("Invalid number", "Enter a valid 10-digit phone number");
+      Alert.alert(t("auth.invalidNumberTitle"), t("auth.invalidNumberMessage"));
       return;
     }
 
@@ -38,85 +43,81 @@ export default function PhoneAuthScreen() {
     setLoading(false);
 
     if (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("auth.errorTitle"), error.message);
       return;
     }
 
     setStep("otp");
   };
 
-  /* ================= VERIFY OTP ================= */
   const verifyOtp = async () => {
     const token = otp.join("");
 
     if (token.length !== 6) {
-      Alert.alert("Invalid OTP", "Enter the 6-digit OTP");
+      Alert.alert(t("auth.invalidOtpTitle"), t("auth.invalidOtpMessage"));
       return;
     }
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       phone: `+91${phone}`,
       token,
       type: "sms",
     });
 
-    const { data: workerData, error: workerError } = await supabase
-  .from('workers')
-  .select('*')
-  .eq('phone', `${phone}`)
-  .single();
-
-if (workerError) {
-  if (workerError.code === 'PGRST116') {
-    Alert.alert("Error", "You are not registered");
-    router.replace('/(app)/(auth)');
-    await supabase.auth.signOut();
-    return;
-  }
-
-  Alert.alert("Error", workerError.message);
-  return;
-}
-
-// ✅ Worker exists — now check status
-switch (workerData.status) {
-  case 'Pending':
-  case 'Pending Login':
-    router.replace({
-  pathname: '/(app)/(auth)/pending',
-  params: { phone: `${phone}` },
-});;
-    break;
-
-  case 'Success':
-    router.replace('/(app)/(tabs)');
-    break;
-
-  case 'Blocked':
-    Alert.alert("Blocked", "Please contact admin");
-    await supabase.auth.signOut();
-    break;
-
-  default:
-    Alert.alert("Error", "Invalid account state");
-}
-
-    setLoading(false);
-
-
     if (error) {
-      Alert.alert("Error", error.message);
+      setLoading(false);
+      Alert.alert(t("auth.errorTitle"), error.message);
       return;
     }
 
-    // console.log("Session:", data.session);
+    const { data: workerData, error: workerError } = await supabase
+      .from("workers")
+      .select("*")
+      .eq("phone", `${phone}`)
+      .single();
+
+    if (workerError) {
+      setLoading(false);
+
+      if (workerError.code === "PGRST116") {
+        Alert.alert(t("auth.errorTitle"), t("auth.unregisteredMessage"));
+        router.replace("/(app)/(auth)");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      Alert.alert(t("auth.errorTitle"), workerError.message);
+      return;
+    }
+
+    switch (workerData.status) {
+      case "Pending":
+      case "Pending Login":
+        router.replace({
+          pathname: "/(app)/(auth)/pending",
+          params: { phone: `${phone}` },
+        });
+        break;
+
+      case "Success":
+        router.replace("/(app)/(tabs)");
+        break;
+
+      case "Blocked":
+        Alert.alert(t("auth.blockedTitle"), t("auth.blockedMessage"));
+        await supabase.auth.signOut();
+        break;
+
+      default:
+        Alert.alert(t("auth.errorTitle"), t("auth.invalidAccountState"));
+    }
+
+    setLoading(false);
   };
 
-  /* ================= OTP HANDLER ================= */
   const handleOtpChange = (value: string, index: number) => {
-    // Handle paste (e.g. 123456)
     if (value.length > 1) {
       const pasted = value.slice(0, 6).split("");
       const newOtp = [...otp];
@@ -143,29 +144,28 @@ switch (workerData.status) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ================= PHONE ================= */}
       {step === "phone" && (
         <View style={styles.container}>
           <View style={styles.iconBox}>
-            <Text style={styles.icon}>🔐</Text>
+            <Text style={styles.icon}>{"\uD83D\uDD10"}</Text>
           </View>
 
           <Text style={styles.title}>Hire Kar</Text>
 
-          <Text style={styles.subtitle}>
-            Enter your phone number to receive a verification code.
-          </Text>
+          <Text style={styles.subtitle}>{t("auth.phoneSubtitle")}</Text>
 
           <View style={styles.formRow}>
             <View style={styles.codeBox}>
-              <Text style={styles.label}>CODE</Text>
+              <Text style={styles.label}>{t("auth.codeLabel").toUpperCase()}</Text>
               <TextInput value="+91" editable={false} style={styles.input} />
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>PHONE NUMBER</Text>
+              <Text style={styles.label}>
+                {t("auth.phoneNumberLabel").toUpperCase()}
+              </Text>
               <TextInput
-                placeholder="Enter phone number"
+                placeholder={t("auth.phonePlaceholder")}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
@@ -180,34 +180,31 @@ switch (workerData.status) {
             disabled={loading}
           >
             <Text style={styles.primaryText}>
-              {loading ? "Sending..." : "Send Code"}
+              {loading ? t("auth.sending") : t("auth.sendCode")}
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ================= OTP ================= */}
       {step === "otp" && (
         <View style={styles.container}>
           <TouchableOpacity
-  style={styles.backButton}
-  onPress={() => {
-    setOtp(["", "", "", "", "", ""]);
-    setStep("phone");
-  }}
->
-  <Text style={styles.backText}>← Back</Text>
-</TouchableOpacity>
+            style={styles.backButton}
+            onPress={() => {
+              setOtp(["", "", "", "", "", ""]);
+              setStep("phone");
+            }}
+          >
+            <Text style={styles.backText}>{"\u2190"} {t("common.back")}</Text>
+          </TouchableOpacity>
 
           <View style={styles.iconBox}>
-            <Text style={styles.icon}>🔓</Text>
+            <Text style={styles.icon}>{"\uD83D\uDCF1"}</Text>
           </View>
 
-          <Text style={styles.titleLarge}>Verify</Text>
+          <Text style={styles.titleLarge}>{t("auth.verifyTitle")}</Text>
 
-          <Text style={styles.subtitle}>
-            We sent a 6-digit code to your mobile device.
-          </Text>
+          <Text style={styles.subtitle}>{t("auth.verifySubtitle")}</Text>
 
           <View style={styles.otpRow}>
             {otpRefs.map((ref, i) => (
@@ -220,11 +217,7 @@ switch (workerData.status) {
                 value={otp[i]}
                 onChangeText={(val) => handleOtpChange(val, i)}
                 onKeyPress={({ nativeEvent }) => {
-                  if (
-                    nativeEvent.key === "Backspace" &&
-                    !otp[i] &&
-                    i > 0
-                  ) {
+                  if (nativeEvent.key === "Backspace" && !otp[i] && i > 0) {
                     otpRefs[i - 1].current?.focus();
                   }
                 }}
@@ -233,15 +226,13 @@ switch (workerData.status) {
           </View>
 
           <TouchableOpacity style={styles.primaryButton} onPress={verifyOtp}>
-            <Text style={styles.primaryText}>Verify</Text>
+            <Text style={styles.primaryText}>{t("auth.verifyButton")}</Text>
           </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
   );
 }
-
-/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   safe: {
@@ -304,15 +295,15 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-  alignSelf: "flex-start",
-  marginBottom: 24,
-},
+    alignSelf: "flex-start",
+    marginBottom: 24,
+  },
 
-backText: {
-  fontSize: 16,
-  fontWeight: "700",
-  color: "#111318",
-},
+  backText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111318",
+  },
 
   input: {
     height: 56,
@@ -341,20 +332,20 @@ backText: {
 
   otpRow: {
     flexDirection: "row",
+    justifyContent: "center",
     gap: 12,
-    marginBottom: 40,
+    marginBottom: 32,
   },
 
- otpInput: {
-  width: 48,          // 🔑 was 64
-  height: 72,         // slightly smaller
-  borderRadius: 14,
-  borderWidth: 2,
-  borderColor: "#dbdfe6",
-  textAlign: "center",
-  fontSize: 24,       // scale with box
-  fontWeight: "700",
-  color: "black",
-},
-
+  otpInput: {
+    width: 48,
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#dbdfe6",
+    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111318",
+  },
 });

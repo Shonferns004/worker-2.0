@@ -5,6 +5,7 @@ import { View, StyleSheet, StatusBar } from "react-native";
 import { supabase } from "@/config/supabase";
 import AppSplash from "@/components/SplashScreen";
 import { registerDevicePushToken } from "@/service/notifications";
+import "@/service/backgroundLocation";
 
 SplashScreen.preventAutoHideAsync();
 

@@ -10,6 +10,10 @@ import {
   goOnline,
   sendLocationToServer,
 } from "@/service/apiService";
+import {
+  ensureBackgroundLocationTracking,
+  stopBackgroundLocationTracking,
+} from "@/service/backgroundLocation";
 import MainHeader from "@/components/home/MainHeader";
 import PriorityFeed from "@/components/home/JobTiles";
 import { startJobAlert, stopJobAlert } from "@/utils/jobAlertSound";
@@ -107,9 +111,13 @@ const Home = () => {
     };
 
     const goOnlineAndStart = async () => {
-      if (!onDuty) return;
+      if (!onDuty) {
+        await stopBackgroundLocationTracking();
+        return;
+      }
 
       await goOnline();
+      await ensureBackgroundLocationTracking();
       await startLocationUpdates();
     };
 

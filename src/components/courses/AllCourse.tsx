@@ -1,32 +1,30 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { getCourses, getEnrolledCourses } from "@/utils/api";
 import { calculateTotalDuration } from "@/lib/duration";
+import { useI18n } from "@/i18n/I18nProvider";
 import { CourseCard } from "./Cards";
 import { ListCourse } from "./ChipList";
 
+const copyMap = {
+  en: { allCourses: "All Courses", lessons: "Lessons" },
+  hi: { allCourses: "सभी कोर्स", lessons: "पाठ" },
+  bn: { allCourses: "সব কোর্স", lessons: "পাঠ" },
+  ta: { allCourses: "அனைத்து பாடங்கள்", lessons: "பாடங்கள்" },
+  te: { allCourses: "అన్ని కోర్సులు", lessons: "పాఠాలు" },
+  mr: { allCourses: "सर्व कोर्स", lessons: "धडे" },
+} as const;
+
 export function AllCoursesSection() {
+  const { language } = useI18n();
+  const copy = useMemo(() => copyMap[language] ?? copyMap.en, [language]);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<"list" | "card">("card");
 
   const router = useRouter();
-
-  // useEffect(() => {
-  //   const fetchCourses = async () => {
-  //     try {
-  //       const res = await getCourses();
-  //       setCourses(res);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   fetchCourses();
-  // }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,12 +40,7 @@ export function AllCoursesSection() {
 
         if (!active) return;
 
-        const enrolledSet = new Set(
-          (enrolled ?? []).map((e: any) => e.courses.id),
-        );
-
-        setEnrolledIds(enrolledSet as Set<string>);
-
+        const enrolledSet = new Set((enrolled ?? []).map((e: any) => e.courses.id));
         const filteredCourses = (allCourses ?? []).filter(
           (course: any) => !enrolledSet.has(course.id),
         );
@@ -66,28 +59,26 @@ export function AllCoursesSection() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>All Courses</Text>
+        <Text style={styles.title}>{copy.allCourses}</Text>
 
         <View style={styles.toggleRow}>
           <TouchableOpacity
             style={[styles.toggleBtn, view === "card" && styles.toggleActive]}
             onPress={() => setView("card")}
           >
-            <Text>☰</Text>
+            <Text>{"\u2630"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.toggleBtn, view === "list" && styles.toggleActive]}
             onPress={() => setView("list")}
           >
-            <Text>≡</Text>
+            <Text>{"\u2261"}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Content */}
       <View style={[styles.content, view === "card" && styles.cardGrid]}>
         {loading
           ? Array.from({ length: 4 }).map((_, i) =>
@@ -103,10 +94,8 @@ export function AllCoursesSection() {
                   key={course.id}
                   image={course.bannerurl}
                   title={course.name}
-                  meta={`${course.category} • ${course.chapters} Lessons`}
-                  duration={calculateTotalDuration(
-                    course.course_json?.chapters,
-                  )}
+                  meta={`${course.category} • ${course.chapters} ${copy.lessons}`}
+                  duration={calculateTotalDuration(course.course_json?.chapters)}
                   onStart={() =>
                     router.push({
                       pathname: "/(app)/(course)/[id]",
@@ -143,47 +132,34 @@ const styles = StyleSheet.create({
     marginTop: 20,
     gap: 16,
   },
-
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-
   title: {
     fontSize: 18,
     fontWeight: "800",
     color: DARK,
   },
-
   toggleRow: {
     flexDirection: "row",
     gap: 8,
   },
-
   toggleBtn: {
     padding: 8,
     borderRadius: 12,
     backgroundColor: "#fff",
   },
-
   toggleActive: {
     backgroundColor: PRIMARY,
   },
-
   content: {
     gap: 12,
   },
-
   cardGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
-  },
-  skeleton: {
-    width: "48%",
-    height: 200,
-    borderRadius: 20,
-    backgroundColor: "#eee",
   },
 });

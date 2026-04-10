@@ -1,24 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
   FlatList,
-  TouchableOpacity,
   Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import dayjs from "dayjs";
 import { MaterialIcons } from "@expo/vector-icons";
 import Animated, {
+  Layout,
   SlideInLeft,
   SlideOutRight,
-  Layout,
 } from "react-native-reanimated";
 
-import { useWorkerStore } from "@/store/workerStore";
-import { calculateDistance } from "@/utils/mapUtils";
-import { estimateETA } from "@/utils/eta";
 import { getWorkerId, supabase } from "@/config/supabase";
+import { useI18n } from "@/i18n/I18nProvider";
+import { useWorkerStore } from "@/store/workerStore";
+import { estimateETA } from "@/utils/eta";
+import { calculateDistance } from "@/utils/mapUtils";
 
 const PRIMARY = "#a3e635";
 const URGENT = "#ef4444";
@@ -40,8 +41,6 @@ type Props = {
   onAccept?: (job: Job) => void;
 };
 
-/* ---------------- UTIL ---------------- */
-
 function formatTime(ms: number) {
   if (ms <= 0) return "00:00";
   const total = Math.floor(ms / 1000);
@@ -50,23 +49,21 @@ function formatTime(ms: number) {
   return `${m}:${s}`;
 }
 
-/* ---------------- EMPTY ---------------- */
+const EmptyFeed = () => {
+  const { t } = useI18n();
 
-const EmptyFeed = () => (
-  <View style={styles.emptyContainer}>
-    <Image
-      source={require("@/assets/icons/bike.png")}
-      style={styles.emptyImage}
-      resizeMode="contain"
-    />
-    <Text style={styles.emptyTitle}>Waiting for nearby jobs</Text>
-    <Text style={styles.emptySub}>
-      Stay online. Jobs around your location will appear instantly.
-    </Text>
-  </View>
-);
-
-/* ---------------- CARD ---------------- */
+  return (
+    <View style={styles.emptyContainer}>
+      <Image
+        source={require("@/assets/icons/bike.png")}
+        style={styles.emptyImage}
+        resizeMode="contain"
+      />
+      <Text style={styles.emptyTitle}>{t("jobs.waitingTitle")}</Text>
+      <Text style={styles.emptySub}>{t("jobs.waitingSubtitle")}</Text>
+    </View>
+  );
+};
 
 const JobCard = ({
   job,
@@ -77,11 +74,13 @@ const JobCard = ({
   now: dayjs.Dayjs;
   onAccept?: (job: Job) => void;
 }) => {
+  const { t } = useI18n();
+  const { location } = useWorkerStore();
+
   const remaining =
     typeof job.expires_at_ms === "number"
       ? job.expires_at_ms - now.valueOf()
       : dayjs(job.expires_at).diff(now);
-  const { location } = useWorkerStore();
 
   const distance =
     location &&
@@ -108,7 +107,6 @@ const JobCard = ({
       layout={Layout.springify()}
       style={[styles.card, { borderLeftColor: borderColor }]}
     >
-      {/* urgent icon */}
       {isUrgent && (
         <View style={styles.fire}>
           <MaterialIcons
@@ -120,7 +118,6 @@ const JobCard = ({
       )}
 
       <View style={styles.cardInner}>
-        {/* TOP ROW */}
         <View style={styles.rowBetween}>
           <View style={{ flex: 1, paddingRight: 10 }}>
             <Text style={[styles.title, isUrgent && { color: URGENT }]}>
@@ -135,7 +132,7 @@ const JobCard = ({
                   {distance ? distance.toFixed(2) : "--"} km
                 </Text>
 
-                <Text style={styles.dot}>•</Text>
+                <Text style={styles.dot}>{"\u2022"}</Text>
 
                 <MaterialIcons name="schedule" size={13} color="#64748b" />
 
@@ -144,17 +141,16 @@ const JobCard = ({
                 </Text>
               </View>
 
-              <Text style={styles.dot}>•</Text>
+              <Text style={styles.dot}>{"\u2022"}</Text>
             </View>
             <Text numberOfLines={2} style={styles.metaText}>
               {job.address}
             </Text>
           </View>
 
-          <Text style={styles.price}>₹{job.price}</Text>
+          <Text style={styles.price}>{"\u20B9"}{job.price}</Text>
         </View>
 
-        {/* BOTTOM ROW */}
         <View style={styles.bottomRow}>
           <View style={[styles.timerBox, { backgroundColor: timerBg }]}>
             <MaterialIcons name="timer" size={16} color={timerText} />
@@ -174,7 +170,7 @@ const JobCard = ({
                 { color: isUrgent ? "#fff" : "#0f172a" },
               ]}
             >
-              {isUrgent ? "ACCEPT NOW" : "Accept Job"}
+              {isUrgent ? t("jobs.acceptNow") : t("jobs.acceptJob")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -183,27 +179,24 @@ const JobCard = ({
   );
 };
 
-/* ---------------- MAIN ---------------- */
-
 export default function PriorityFeed({ jobs, onAccept }: Props) {
   const [now, setNow] = useState(dayjs());
 
   const handleAccept = async (item: Job) => {
-  const workerId = await getWorkerId()
+    const workerId = await getWorkerId();
 
-  await supabase
-    .from("job_offers")
-    .update({
-      response: "ACCEPTED",
-      responded_at: new Date(),
-    })
-    .eq("job_id", item.id)
-    .eq("worker_id", workerId);
+    await supabase
+      .from("job_offers")
+      .update({
+        response: "ACCEPTED",
+        responded_at: new Date(),
+      })
+      .eq("job_id", item.id)
+      .eq("worker_id", workerId);
 
-  onAccept?.(item);
-};
+    onAccept?.(item);
+  };
 
-  /* global realtime ticker */
   useEffect(() => {
     const interval = setInterval(() => setNow(dayjs()), 1000);
     return () => clearInterval(interval);
@@ -237,8 +230,6 @@ export default function PriorityFeed({ jobs, onAccept }: Props) {
   );
 }
 
-/* ---------------- STYLES ---------------- */
-
 const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 140,
@@ -246,7 +237,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     flexGrow: 1,
   },
-
   card: {
     backgroundColor: "#ffffff",
     borderRadius: 18,
@@ -259,62 +249,52 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
-
   cardInner: {
     paddingVertical: 16,
     paddingHorizontal: 14,
   },
-
   fire: {
     position: "absolute",
     top: 8,
     right: 8,
     zIndex: 5,
   },
-
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-
   title: {
     fontSize: 18,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
-
   price: {
     fontSize: 22,
     fontWeight: "900",
     color: "#16a34a",
   },
-
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
   },
-
   metaText: {
     fontSize: 13,
     color: "#475569",
     marginLeft: 4,
     maxWidth: 900,
   },
-
   dot: {
     marginHorizontal: 6,
     color: "#cbd5e1",
   },
-
   bottomRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 14,
     gap: 10,
   },
-
   timerBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -322,46 +302,39 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
   },
-
   timerText: {
     marginLeft: 6,
     fontSize: 14,
     fontWeight: "800",
   },
-
   acceptBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
   },
-
   acceptText: {
     fontSize: 14,
     fontWeight: "800",
   },
-
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 40,
   },
-
   emptyImage: {
     width: 200,
     height: 200,
     opacity: 0.9,
     marginBottom: 20,
   },
-
   emptyTitle: {
     fontSize: 20,
     fontWeight: "900",
     color: "#0f172a",
     marginBottom: 6,
   },
-
   emptySub: {
     fontSize: 13,
     color: "#64748b",

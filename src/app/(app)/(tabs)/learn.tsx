@@ -1,40 +1,64 @@
 import Header from "@/components/Header";
 import { AllCoursesSection } from "@/components/courses/AllCourse";
-import { ListCourse } from "@/components/courses/ChipList";
 import CourseCard from "@/components/courses/CourseCard";
-import { getUser } from "@/config/supabase";
-import { useUser } from "@/context/UserContext";
+import { useI18n } from "@/i18n/I18nProvider";
 import { getEnrolledCourses } from "@/utils/api";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
-  Image,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   SafeAreaView,
   StatusBar,
 } from "react-native";
 
+const courseCopy = {
+  en: {
+    eyebrow: "Skills Hub",
+    title: "Learn",
+    subtitle: "Pick up new skills and keep your momentum going.",
+    continueLearning: "Continue Learning",
+  },
+  hi: {
+    eyebrow: "स्किल्स हब",
+    title: "सीखें",
+    subtitle: "नई स्किल सीखें और अपनी प्रगति जारी रखें।",
+    continueLearning: "सीखना जारी रखें",
+  },
+  bn: {
+    eyebrow: "স্কিলস হাব",
+    title: "শিখুন",
+    subtitle: "নতুন স্কিল শিখুন এবং আপনার অগ্রগতি বজায় রাখুন।",
+    continueLearning: "শেখা চালিয়ে যান",
+  },
+  ta: {
+    eyebrow: "திறன் மையம்",
+    title: "கற்போம்",
+    subtitle: "புதிய திறன்களை கற்று உங்கள் முன்னேற்றத்தை தொடருங்கள்.",
+    continueLearning: "கற்றலை தொடருங்கள்",
+  },
+  te: {
+    eyebrow: "స్కిల్స్ హబ్",
+    title: "నేర్చుకోండి",
+    subtitle: "కొత్త నైపుణ్యాలు నేర్చుకుని మీ పురోగతిని కొనసాగించండి.",
+    continueLearning: "నేర్చుకోవడం కొనసాగించండి",
+  },
+  mr: {
+    eyebrow: "स्किल्स हब",
+    title: "शिका",
+    subtitle: "नवीन कौशल्ये शिका आणि तुमची प्रगती सुरू ठेवा.",
+    continueLearning: "शिकणे सुरू ठेवा",
+  },
+} as const;
+
 export default function LearnTab() {
+  const { language } = useI18n();
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useUser();
 
-  const [skillPoints, setSkillPoints] = useState(0);
-
-  useFocusEffect(
-    useCallback(() => {
-      const fetchPoints = async () => {
-        const data = await getUser();
-        setSkillPoints(data?.skill_points ?? 0);
-      };
-
-      fetchPoints();
-    }, []),
-  );
+  const copy = useMemo(() => courseCopy[language] ?? courseCopy.en, [language]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,8 +97,11 @@ export default function LearnTab() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* HEADER */}
-        <Header />
+        <Header
+          eyebrow={copy.eyebrow}
+          title={copy.title}
+          subtitle={copy.subtitle}
+        />
 
         {loading ? (
           <View style={styles.section}>
@@ -90,11 +117,7 @@ export default function LearnTab() {
               {enrolledCourses
                 .filter((item) => {
                   const progress = calculateProgress(item);
-
-                  // Always show in-progress courses
                   if (progress < 100) return true;
-
-                  // If completed_at doesn't exist, keep showing
                   if (!item.completed_at) return true;
                 })
                 .map((item, index) => {
@@ -104,7 +127,7 @@ export default function LearnTab() {
                     <View key={index}>
                       <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>
-                          Continue Learning
+                          {copy.continueLearning}
                         </Text>
                       </View>
                       <CourseCard
@@ -127,7 +150,7 @@ export default function LearnTab() {
     </SafeAreaView>
   );
 }
-const PRIMARY = "#a1e633";
+
 const DARK = "#161b0e";
 
 const styles = StyleSheet.create({
@@ -136,156 +159,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9f9f8",
     marginTop: StatusBar.currentHeight,
   },
-  root: {
-    flex: 1,
-    backgroundColor: "#f9f9f8",
-  },
-
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-  },
-
-  welcome: {
-    fontSize: 10,
-    color: `${DARK}66`,
-    fontWeight: "600",
-  },
-
-  username: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: DARK,
-  },
-
-  xpBox: {
-    alignItems: "flex-end",
-  },
-
-  xpLabel: {
-    fontSize: 8,
-    fontWeight: "700",
-    color: `${DARK}66`,
-  },
-
-  xpValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: DARK,
-  },
-
   section: {
     gap: 16,
   },
-
   sectionHeader: {
     paddingHorizontal: 24,
     flexDirection: "row",
     justifyContent: "space-between",
   },
-
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "800",
-    color: DARK,
-  },
-
-  primaryText: {
-    fontSize: 10,
-    color: PRIMARY,
-    fontWeight: "700",
-  },
-
-  courseCard: {
-    width: 280,
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 16,
-    marginLeft: 24,
-  },
-
-  imageWrapper: {
-    height: 128,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 12,
-  },
-
-  courseImage: {
-    width: "100%",
-    height: "100%",
-  },
-
-  tag: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-
-  tagText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#fff",
-  },
-
-  courseTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: DARK,
-  },
-
-  lessonText: {
-    fontSize: 10,
-    color: `${DARK}66`,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-
-  progressBar: {
-    height: 6,
-    backgroundColor: "#f0f4e8",
-    borderRadius: 999,
-    overflow: "hidden",
-    marginBottom: 12,
-  },
-
-  progressFill: {
-    height: "100%",
-    backgroundColor: PRIMARY,
-  },
-
-  primaryButton: {
-    backgroundColor: PRIMARY,
-    paddingVertical: 12,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-
-  primaryButtonText: {
-    fontSize: 12,
     fontWeight: "800",
     color: DARK,
   },
