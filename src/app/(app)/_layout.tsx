@@ -39,7 +39,7 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <StatusBar barStyle={"dark-content"} />
+      <StatusBar backgroundColor="#a3e635" barStyle="dark-content" />
       {/* Navigation tree MUST always exist */}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />

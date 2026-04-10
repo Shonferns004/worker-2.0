@@ -33,8 +33,8 @@ AppState.addEventListener("change", (state) => {
 
 
 export const getWorkerId = async () => {
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id;
+  const worker = await getUser();
+  return worker?.id ?? null;
 }
 
 export const getUserPhone = async (): Promise<string> => {

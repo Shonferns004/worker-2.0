@@ -135,7 +135,7 @@ export const goOnline = async () => {
 
 export const toogleOndutyButton = async (onDuty: any) => {
   try {
-    await api.post(`/worker/duty`, { onDuty });
+    await api.patch(`/worker/duty`, { onDuty });
   } catch {
     console.log("On duty toggle failed");
   }

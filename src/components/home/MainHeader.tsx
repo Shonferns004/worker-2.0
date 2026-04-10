@@ -157,15 +157,14 @@ const MainHeader = () => {
           })
           .eq("id", authUser.id);
 
-        await ensureBackgroundLocationTracking();
         await toogleOndutyButton(true);
+        await ensureBackgroundLocationTracking();
       } else {
         await stopBackgroundLocationTracking();
         await supabase
           .from("workers")
           .update({ on_duty: false })
           .eq("id", authUser.id);
-
         await toogleOndutyButton(false);
       }
 
@@ -260,9 +259,10 @@ const MainHeader = () => {
               </View>
 
               <Text style={styles.dutySub}>
-                {(onDuty
-                  ? t("home.acceptingTasks")
-                  : t("home.notAcceptingJobs")
+                {(
+                  onDuty
+                    ? t("home.acceptingTasks")
+                    : t("home.notAcceptingJobs")
                 ).toUpperCase()}
               </Text>
             </View>

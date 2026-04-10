@@ -1,14 +1,39 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
-// import { House } from 'phosphor-react-native'
+import { Dimensions, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const { height: screenHeight } = Dimensions.get("window");
 
 const TabLayout = () => {
+  const insets = useSafeAreaInsets();
+
+  const baseTabHeight = screenHeight * 0.068;
+
+  const tabHeight = useMemo(() => {
+    const min = Platform.OS === "ios" ? 48 : 50;
+    const max = 58;
+    return Math.min(Math.max(baseTabHeight, min), max) + insets.bottom;
+  }, [baseTabHeight, insets.bottom]);
+
+  const iconSize = useMemo(() => {
+    const usableHeight = tabHeight - insets.bottom;
+    return Math.min(Math.max(usableHeight * 0.4, 21), 26);
+  }, [insets.bottom, tabHeight]);
+
+  const tabPaddingTop = useMemo(() => {
+    return screenHeight < 700 ? 2 : 4;
+  }, []);
+
+  const tabItemPaddingBottom = useMemo(() => {
+    return insets.bottom > 0 ? Math.max(2, insets.bottom * 0.08) : 2;
+  }, [insets.bottom]);
+
   return (
     <Tabs
-    screenOptions={{
-      freezeOnBlur: true,
+      screenOptions={{
+        freezeOnBlur: true,
         tabBarActiveTintColor: "#a1e633",
         tabBarInactiveTintColor: "black",
         tabBarShowLabel: false,
@@ -16,16 +41,25 @@ const TabLayout = () => {
           fontSize: 12,
         },
         tabBarStyle: {
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: "#e5e7eb",
           width: "100%",
-          height: Platform.OS == "ios" ? 70 : 70,
+          height: tabHeight,
+          paddingBottom: insets.bottom,
+          paddingTop: tabPaddingTop,
+          backgroundColor: "#ffffff",
+        },
+        tabBarItemStyle: {
+          justifyContent: "center",
+          alignItems: "center",
+          paddingBottom: tabItemPaddingBottom,
         },
         headerStyle: {
           height: 60,
         },
         headerTitleStyle: {
           fontSize: 22,
-          fontWeight: 700,
+          fontWeight: "700",
           marginLeft: 10,
         },
         headerShadowVisible: false,
@@ -35,10 +69,10 @@ const TabLayout = () => {
         name="index"
         options={{
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
-              size={size}
+              size={iconSize}
               color={color}
             />
           ),
@@ -48,39 +82,37 @@ const TabLayout = () => {
         name="learn"
         options={{
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "book" : "book-outline"}
-              size={size}
+              size={iconSize}
               color={color}
             />
           ),
         }}
       />
-
       <Tabs.Screen
-  name="mycourse"
-  options={{
-    headerShown: false,
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons
-        name={focused ? "school" : "school-outline"}
-        size={size}
-        color={color}
+        name="mycourse"
+        options={{
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "school" : "school-outline"}
+              size={iconSize}
+              color={color}
+            />
+          ),
+        }}
       />
-    ),
-  }}
-/>
-
       <Tabs.Screen
         name="profile"
         options={{
           href: null,
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "person" : "person-outline"}
-              size={size}
+              size={iconSize}
               color={color}
             />
           ),

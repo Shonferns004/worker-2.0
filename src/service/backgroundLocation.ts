@@ -74,12 +74,30 @@ export const ensureBackgroundLocationTracking = async () => {
 };
 
 export const stopBackgroundLocationTracking = async () => {
-  const started = await Location.hasStartedLocationUpdatesAsync(WORKER_LOCATION_TASK);
-  if (!started) {
-    return;
-  }
+  try {
+    const taskDefined = TaskManager.isTaskDefined(WORKER_LOCATION_TASK);
+    if (!taskDefined) {
+      return;
+    }
 
-  await Location.stopLocationUpdatesAsync(WORKER_LOCATION_TASK);
+    const started = await Location.hasStartedLocationUpdatesAsync(
+      WORKER_LOCATION_TASK,
+    );
+    if (!started) {
+      return;
+    }
+
+    await Location.stopLocationUpdatesAsync(WORKER_LOCATION_TASK);
+  } catch (error) {
+    const message = String((error as Error)?.message ?? error ?? "");
+    if (
+      message.includes("TaskNotFoundException") ||
+      message.includes("Task 'worker-background-location' not found")
+    ) {
+      return;
+    }
+    console.log("Stop location updates skipped", error);
+  }
 };
 
 export const backgroundLocationTaskName = WORKER_LOCATION_TASK;

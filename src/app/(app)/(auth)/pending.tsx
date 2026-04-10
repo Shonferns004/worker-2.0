@@ -111,7 +111,7 @@ export default function Onboarding() {
     const parsedExperience = Number(experienceYears);
     const workerUpdatePayload = {
       status: "Success",
-      service_type: serviceType,
+      worker_type: serviceType,
       tier: getTierForExperience(parsedExperience),
       date_of_birth: dateOfBirth,
       gender,
@@ -136,7 +136,7 @@ export default function Onboarding() {
         .from("workers")
         .update({
           status: "Success",
-          service_type: serviceType,
+          worker_type: serviceType,
           tier: getTierForExperience(parsedExperience),
         })
         .eq("id", worker.id);
