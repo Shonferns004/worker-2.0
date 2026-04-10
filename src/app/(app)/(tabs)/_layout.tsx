@@ -3,6 +3,8 @@ import { Tabs } from "expo-router";
 import { Dimensions, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -70,8 +72,8 @@ const TabLayout = () => {
         options={{
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
+            <MaterialCommunityIcons 
+              name={focused ? "home-variant" : "home-variant-outline"}
               size={iconSize}
               color={color}
             />
