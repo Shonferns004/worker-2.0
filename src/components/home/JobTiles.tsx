@@ -15,20 +15,23 @@ import Animated, {
   Layout,
 } from "react-native-reanimated";
 
-import { acceptJobOffer } from "@/service/apiService";
 import { useWorkerStore } from "@/store/workerStore";
 import { calculateDistance } from "@/utils/mapUtils";
 import { estimateETA } from "@/utils/eta";
+import { getWorkerId, supabase } from "@/config/supabase";
 
 const PRIMARY = "#a3e635";
 const URGENT = "#ef4444";
 
 type Job = {
   id: string;
+  offer_id?: string;
   type: string;
   destination: any;
   address: string;
   price: number;
+  received_at_ms?: number;
+  expires_at_ms?: number;
   expires_at: string | Date;
 };
 
@@ -74,7 +77,10 @@ const JobCard = ({
   now: dayjs.Dayjs;
   onAccept?: (job: Job) => void;
 }) => {
-  const remaining = dayjs(job.expires_at).diff(now);
+  const remaining =
+    typeof job.expires_at_ms === "number"
+      ? job.expires_at_ms - now.valueOf()
+      : dayjs(job.expires_at).diff(now);
   const { location } = useWorkerStore();
 
   const distance =
@@ -183,13 +189,19 @@ export default function PriorityFeed({ jobs, onAccept }: Props) {
   const [now, setNow] = useState(dayjs());
 
   const handleAccept = async (item: Job) => {
-    try {
-      await acceptJobOffer(item.id);
-      onAccept?.(item);
-    } catch (err) {
-      console.log("ACCEPT FAILED:", err);
-    }
-  };
+  const workerId = await getWorkerId()
+
+  await supabase
+    .from("job_offers")
+    .update({
+      response: "ACCEPTED",
+      responded_at: new Date(),
+    })
+    .eq("job_id", item.id)
+    .eq("worker_id", workerId);
+
+  onAccept?.(item);
+};
 
   /* global realtime ticker */
   useEffect(() => {
@@ -201,7 +213,10 @@ export default function PriorityFeed({ jobs, onAccept }: Props) {
     return jobs
       .map((j) => ({
         ...j,
-        remaining: dayjs(j.expires_at).diff(now),
+        remaining:
+          typeof j.expires_at_ms === "number"
+            ? j.expires_at_ms - now.valueOf()
+            : dayjs(j.expires_at).diff(now),
       }))
       .filter((j) => j.remaining > 0)
       .sort((a, b) => a.remaining - b.remaining);

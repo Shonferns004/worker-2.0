@@ -1,88 +1,124 @@
-import { View, Text, FlatList, Image } from "react-native";
+import { AppState, Text, View } from "react-native";
 import React, { useEffect, useState } from "react";
-import { useIsFocused } from "@react-navigation/native";
-import { useWorkerStore } from "@/store/workerStore";
 import * as Location from "expo-location";
+import { router } from "expo-router";
+import { supabase, getWorkerId } from "@/config/supabase";
+import { useWorkerStore } from "@/store/workerStore";
 import { homeStyles } from "@/styles/homeStyles";
-import { supabase } from "@/config/supabase";
-import { sendLocationToServer } from "@/service/apiService";
+import {
+  getWorkerJobHistory,
+  goOnline,
+  sendLocationToServer,
+} from "@/service/apiService";
 import MainHeader from "@/components/home/MainHeader";
 import PriorityFeed from "@/components/home/JobTiles";
 import { startJobAlert, stopJobAlert } from "@/utils/jobAlertSound";
 
+const OFFER_LIFETIME_MS = 45_000;
+
+const mapJob = (job: any, offer?: any) => ({
+  id: job.id,
+  offer_id: offer?.id,
+  type: job.type ?? "Service Job",
+  price: (job.visit_fee || 0) + (job.job_charge || 0),
+  address: job.destination?.address || "Customer Location",
+  destination: job.destination,
+  received_at_ms: Date.now(),
+  expires_at_ms:
+    Date.now() +
+    Math.max(
+      1_000,
+      OFFER_LIFETIME_MS -
+        Math.max(
+          0,
+          Date.now() -
+            new Date(offer?.created_at || Date.now()).getTime(),
+        ),
+    ),
+  expires_at:
+    offer?.expires_at ||
+    new Date(
+      new Date(offer?.created_at || job.created_at).getTime() + OFFER_LIFETIME_MS,
+    ).toISOString(),
+});
+
 const Home = () => {
-  const isFocused = useIsFocused();
   const { onDuty, setLocation } = useWorkerStore();
-  const [jobOffers, setJobOffers] = useState<any>([]);
-  const firstLoad = React.useRef(true);
-  const [gpsReady, setGpsReady] = useState(false);
+  const [jobOffers, setJobOffers] = useState<any[]>([]);
+  const [todayEarnings, setTodayEarnings] = useState(0);
 
-  const lastSent = React.useRef(0);
+  const upsertOffer = (job: any, offer?: any) => {
+    setJobOffers((prev) => [
+      mapJob(job, offer),
+      ...prev.filter((existing) => existing.id !== job.id),
+    ]);
+  };
 
-  const maybeSendLocation = (lat: number, lng: number) => {
-    const now = Date.now();
-    if (now - lastSent.current < 5000) return;
-    lastSent.current = now;
-    sendLocationToServer(lat, lng);
+  const syncPendingOffers = async (workerId: string) => {
+    const { data: pendingOffers } = await supabase
+      .from("job_offers")
+      .select("id, job_id, created_at, response")
+      .eq("worker_id", workerId)
+      .is("response", null)
+      .order("created_at", { ascending: false });
+
+    if (!pendingOffers?.length) return;
+
+    const jobIds = pendingOffers.map((offer) => offer.job_id);
+    const { data: jobs } = await supabase
+      .from("jobs")
+      .select("*")
+      .in("id", jobIds)
+      .eq("status", "SEARCHING");
+
+    jobs?.forEach((job) => {
+      const matchingOffer = pendingOffers.find((offer) => offer.job_id === job.id);
+      upsertOffer(job, matchingOffer);
+    });
   };
 
   useEffect(() => {
-    let locationSubscription: any;
-    const startLoctionUpdates = async () => {
+    let locationSubscription: Location.LocationSubscription | undefined;
+
+    const startLocationUpdates = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        locationSubscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 10000,
-            distanceInterval: 10,
-          },
-          (location) => {
-            const { latitude, longitude, heading } = location.coords;
+      if (status !== "granted") return;
 
-            if (!latitude || !longitude) return;
+      locationSubscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Highest,
+          timeInterval: 10000,
+          distanceInterval: 10,
+        },
+        async ({ coords }) => {
+          const { latitude, longitude, heading } = coords;
+          if (!latitude || !longitude) return;
 
-            setGpsReady(true);
+          setLocation({
+            latitude,
+            longitude,
+            heading: heading || 0,
+            address: "Somewhere",
+          });
 
-            setLocation({
-              latitude,
-              longitude,
-              heading: heading || 0,
-              address: "Somewhere",
-            });
-
-            maybeSendLocation(latitude, longitude);
-          },
-        );
-      }
+          await sendLocationToServer(latitude, longitude);
+        },
+      );
     };
 
-    if (onDuty) {
-      startLoctionUpdates();
-    }
+    const goOnlineAndStart = async () => {
+      if (!onDuty) return;
+
+      await goOnline();
+      await startLocationUpdates();
+    };
+
+    goOnlineAndStart();
 
     return () => {
-      if (locationSubscription) {
-        locationSubscription.remove();
-      }
+      locationSubscription?.remove();
     };
-  }, [onDuty]);
-
-  useEffect(() => {
-    if (!onDuty || !isFocused) return;
-
-    const loadExistingJobs = async () => {
-      const { data } = await supabase
-        .from("jobs")
-        .select("*")
-        .eq("status", "SEARCHING_FOR_WORKER")
-        .order("created_at", { ascending: false });
-
-      if (data) setJobOffers(data.map(mapJob));
-    };
-
-    loadExistingJobs();
-  }, [onDuty, isFocused]);
+  }, [onDuty, setLocation]);
 
   useEffect(() => {
     if (!onDuty) {
@@ -91,117 +127,170 @@ const Home = () => {
   }, [onDuty]);
 
   useEffect(() => {
-    if (!onDuty || !isFocused) return;
+    let active = true;
 
-    const channel = supabase.channel(`worker-jobs`);
+    const loadTodayEarnings = async () => {
+      try {
+        const jobs = await getWorkerJobHistory();
+        if (!active) return;
 
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "jobs",
-          filter: "status=eq.SEARCHING_FOR_WORKER",
-        },
-        (payload) => {
-          const job = mapJob(payload.new);
+        const today = new Date().toDateString();
+        const total = jobs
+          .filter((job: any) => {
+            if (job.status !== "COMPLETED") return false;
+            const completedAt = new Date(
+              job.completed_at ?? job.updated_at ?? job.created_at,
+            );
+            return completedAt.toDateString() === today;
+          })
+          .reduce(
+            (sum: number, job: any) =>
+              sum + Number(job.final_total ?? job.estimated_total ?? 0),
+            0,
+          );
 
-          setJobOffers((prev: any) => {
-            if (prev.some((j: any) => j.id === job.id)) return prev;
+        setTodayEarnings(total);
+      } catch {
+        if (active) setTodayEarnings(0);
+      }
+    };
 
-            // 🔔 START ALARM WHEN FIRST NEW JOB ARRIVES
-            if (prev.length === 0) {
-              startJobAlert();
-            }
-
-            return [job, ...prev];
-          });
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "jobs",
-        },
-        (payload) => {
-          const job = payload.new as any;
-
-          if (job.status !== "SEARCHING_FOR_WORKER") {
-            setJobOffers((prev: any) => {
-              const updated = prev.filter((j: any) => j.id !== job.id);
-
-              // if no jobs left -> stop alarm
-              if (updated.length === 0) {
-                stopJobAlert();
-              }
-
-              return updated;
-            });
-          }
-        },
-      );
-
-    channel.subscribe();
+    loadTodayEarnings();
 
     return () => {
-      supabase.removeChannel(channel);
+      active = false;
     };
-  }, [onDuty, isFocused]);
-
-  const mapJob = (j: any) => ({
-    id: j.id,
-    type: j.type ?? "Service Job",
-
-    // REAL price
-    price: (j.visit_fee || 0) + (j.job_charge || 0),
-
-    // address from json column
-    address: j.destination?.address || "Customer Location",
-
-    // you don't store distance yet
-    destination: j.destination,
-
-    // MOST IMPORTANT PART
-    expires_at:
-      j.expires_at ||
-      new Date(new Date(j.created_at).getTime() + 45000).toISOString(),
-  });
-
+  }, []);
 
   useEffect(() => {
-  if (!onDuty) return;
+    if (!onDuty) {
+      stopJobAlert();
+      return;
+    }
 
-  const interval = setInterval(() => {
-    setJobOffers((prev: any) => {
-      if (prev.length === 0) return prev;
+    let channel: any;
+    let active = true;
+    let workerId: string | undefined;
 
-      const now = Date.now();
+    const startListening = async () => {
+      workerId = await getWorkerId();
+      if (!workerId) return;
 
-      // remove expired jobs
-      const stillActive = prev.filter((job: any) => {
-        const expiry = new Date(job.expires_at).getTime();
-        return expiry > now;
-      });
+      await syncPendingOffers(workerId);
+      if (!active) return;
 
-      // IMPORTANT: stop sound when last job expired
-      if (prev.length > 0 && stillActive.length === 0) {
-        console.log("ALL JOBS EXPIRED -> STOP ALARM");
-        stopJobAlert();
+      channel = supabase
+        .channel(`private-job-offers-${workerId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "job_offers",
+            filter: `worker_id=eq.${workerId}`,
+          },
+          async (payload) => {
+            const offer = payload.new;
+
+            const { data: job } = await supabase
+              .from("jobs")
+              .select("*")
+              .eq("id", offer.job_id)
+              .single();
+
+            if (!job) return;
+
+            upsertOffer(job, offer);
+            startJobAlert();
+          },
+        )
+        .subscribe();
+    };
+
+    startListening();
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      if (workerId) {
+        syncPendingOffers(workerId);
       }
-
-      return stillActive;
     });
-  }, 1000); // check every second
 
-  return () => clearInterval(interval);
-}, [onDuty]);
+    return () => {
+      active = false;
+      appStateSubscription.remove();
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [onDuty]);
+
+  useEffect(() => {
+    let channel: any;
+
+    const listenForAssignment = async () => {
+      const workerId = await getWorkerId();
+      if (!workerId) return;
+
+      channel = supabase
+        .channel(`worker-assign-${workerId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "jobs",
+            filter: `worker_id=eq.${workerId}`,
+          },
+          (payload) => {
+            const job = payload.new as any;
+
+            if (job.status === "ASSIGNED") {
+              router.replace({
+                pathname: "/live-job",
+                params: { id: job.id },
+              });
+            }
+          },
+        )
+        .subscribe();
+    };
+
+    listenForAssignment();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!onDuty) return;
+
+    const interval = setInterval(() => {
+      setJobOffers((prev) => {
+        if (prev.length === 0) return prev;
+
+        const now = Date.now();
+        const activeOffers = prev.filter((job) => {
+          return Number(job.expires_at_ms || 0) > now;
+        });
+
+        if (prev.length > 0 && activeOffers.length === 0) {
+          stopJobAlert();
+        }
+
+        return activeOffers;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [onDuty]);
 
   const removeJob = (job: any) => {
-    setJobOffers((prevOffers: any) => {
-      const updated = prevOffers.filter((offer: any) => offer.id !== job.id);
+    setJobOffers((prevOffers) => {
+      const updated = prevOffers.filter((offer) => offer.id !== job.id);
 
       if (updated.length === 0) {
         stopJobAlert();
@@ -210,7 +299,6 @@ const Home = () => {
       return updated;
     });
   };
-
 
   return (
     <View style={homeStyles.container}>

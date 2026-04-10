@@ -1,6 +1,7 @@
 import { normalizePhone } from '@/lib/normalize'
 import { createClient } from '@supabase/supabase-js'
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 
 
 export const supabase = createClient(
@@ -15,6 +16,26 @@ export const supabase = createClient(
     },
   }
 )
+
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.access_token) {
+    supabase.realtime.setAuth(session.access_token);
+  }
+});
+
+// keeps realtime alive when app foregrounds
+AppState.addEventListener("change", (state) => {
+  if (state === "active") {
+    supabase.realtime.connect();
+  }
+});
+
+
+export const getWorkerId = async () => {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id;
+}
 
 export const getUserPhone = async (): Promise<string> => {
   const {

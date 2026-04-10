@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { View, StyleSheet, StatusBar } from "react-native";
 import { supabase } from "@/config/supabase";
 import AppSplash from "@/components/SplashScreen";
+import { registerDevicePushToken } from "@/service/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -23,6 +24,7 @@ export default function AppLayout() {
       await SplashScreen.hideAsync();
 
       if (session) {
+        registerDevicePushToken();
         router.replace("/(app)/(tabs)");
       } else {
         router.replace("/(app)/(auth)");
@@ -32,7 +34,7 @@ export default function AppLayout() {
     };
 
     init();
-  }, []);
+  }, [router]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -43,6 +45,7 @@ export default function AppLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(course)" />
         <Stack.Screen name="(jobs)" />
+        <Stack.Screen name="profile" />
       </Stack>
 
       {/* Splash as overlay */}

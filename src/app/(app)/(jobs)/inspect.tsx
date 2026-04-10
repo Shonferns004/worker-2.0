@@ -14,12 +14,19 @@ import { supabase } from "@/config/supabase";
 import { screenHeight } from "@/utils/Constants";
 import { verifyTaskType } from "@/service/apiService";
 
+const CANCELLED_STATUSES = [
+  "CANCELLED",
+  "CANCELLED_BY_USER",
+  "CANCELLED_BY_WORKER",
+  "AUTO_CANCELLED",
+  "EXPIRED",
+];
+
 export default function VerifyTask() {
   const bottomSheetRef = useRef<BottomSheet>(null);
 
   const snapPoints = useMemo(() => ["70%"], []);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [jobData, setJobData] = useState<any>(null);
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
@@ -62,12 +69,16 @@ export default function VerifyTask() {
         return;
       }
 
-      setJobData(data);
-      setDifficulty(data?.user_selected_size.toUpperCase());
+      const initialSize = data?.worker_confirmed_size ?? data?.user_selected_size;
+      if (initialSize) {
+        const normalized =
+          initialSize.charAt(0).toUpperCase() + initialSize.slice(1).toLowerCase();
+        setDifficulty(normalized as "Small" | "Medium" | "Large");
+      }
     };
 
     fetchJob();
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     if (!id) return;
@@ -84,16 +95,26 @@ export default function VerifyTask() {
         },
         (payload) => {
           const job = payload.new;
-          setJobData(job);
 
-          if (job.status === "APPROVED") {
-            // Alert.alert("Customer cancelled the job");
-            router.replace("/(app)/(tabs)/temp");
+          if (job.status === "IN_PROGRESS") {
+            router.replace({
+              pathname: "/(app)/(jobs)/work-in-progress",
+              params: { id: job.id },
+            });
+            return;
           }
 
           if (job.status === "COMPLETED") {
-            Alert.alert("Job finished");
-            router.replace("/(app)/(tabs)/temp");
+            router.replace({
+              pathname: "/(app)/(jobs)/payment-qr",
+              params: { id: job.id },
+            });
+            return;
+          }
+
+          if (CANCELLED_STATUSES.includes(job.status)) {
+            Alert.alert("Job was cancelled");
+            router.replace("/(app)/(tabs)");
           }
         },
       )
@@ -102,7 +123,7 @@ export default function VerifyTask() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, router]);
 
   const handleVerifyTaskType = async () => {
     const success = await verifyTaskType(
@@ -110,8 +131,10 @@ export default function VerifyTask() {
       difficulty?.toLowerCase() as string,
     );
     if (success) {
-      Alert.alert("Task type verified");
-      router.replace("/(app)/(tabs)");
+      router.replace({
+        pathname: "/(app)/(jobs)/approval-pending",
+        params: { id: id as string },
+      });
     } else {
       Alert.alert("Failed to verify task type");
     }

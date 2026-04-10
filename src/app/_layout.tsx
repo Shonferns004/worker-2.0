@@ -5,6 +5,7 @@ import { SelectedChapterIndexContext } from "@/context/SelectedChapterContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WSProvider } from "@/service/webSocket";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import AppAlertProvider from "@/components/common/AppAlertProvider";
 
 const queryClient = new QueryClient();
 
@@ -14,11 +15,13 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
     <UserProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <SelectedChapterIndexContext.Provider
-        value={{ selectedIndex, setSelectedIndex }}
-      >
-        <Slot />
-      </SelectedChapterIndexContext.Provider>
+      <AppAlertProvider>
+        <SelectedChapterIndexContext.Provider
+          value={{ selectedIndex, setSelectedIndex }}
+        >
+          <Slot />
+        </SelectedChapterIndexContext.Provider>
+      </AppAlertProvider>
       </GestureHandlerRootView>
     </UserProvider>
     </QueryClientProvider>

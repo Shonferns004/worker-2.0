@@ -75,6 +75,7 @@ const TabLayout = () => {
       <Tabs.Screen
         name="profile"
         options={{
+          href: null,
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons

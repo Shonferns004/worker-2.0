@@ -83,6 +83,7 @@ if (workerError) {
 // ✅ Worker exists — now check status
 switch (workerData.status) {
   case 'Pending':
+  case 'Pending Login':
     router.replace({
   pathname: '/(app)/(auth)/pending',
   params: { phone: `${phone}` },

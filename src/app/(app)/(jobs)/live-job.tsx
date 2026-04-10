@@ -1,11 +1,11 @@
-import { View, Text, Alert } from "react-native";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Alert } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkerStore } from "@/store/workerStore";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
 import { rideStyles } from "@/styles/rideStyles";
 import WorkerLiveTracking from "@/components/job/WorkerLiveTracking";
-import { updateJobLocation, updateJobStatus, verifyArival } from "@/service/apiService";
+import { updateJobLocation, verifyArival } from "@/service/apiService";
 import OtpModal from "@/components/job/OtpModal";
 import { supabase } from "@/config/supabase";
 import ArrivalSheet from "@/components/job/ArrivalSheet";
@@ -15,6 +15,13 @@ import { screenHeight } from "@/utils/Constants";
 
 
 const androidHeight = [screenHeight * 0.3, screenHeight * 0.3];
+const CANCELLED_STATUSES = [
+  "CANCELLED",
+  "CANCELLED_BY_USER",
+  "CANCELLED_BY_WORKER",
+  "AUTO_CANCELLED",
+  "EXPIRED",
+];
 
 const LiveJob = () => {
   const [isOtpModalVisible, setOtpModalVisible] = useState(false);
@@ -26,12 +33,14 @@ const LiveJob = () => {
   const bottomSheetRef = useRef<BottomSheet>(null);
 
 const snapPoints = useMemo(() => androidHeight, []);
-  const maybeUpdateLocation = (lat: number, lng: number) => {
+
+
+  const maybeUpdateLocation = useCallback((lat: number, lng: number) => {
     const now = Date.now();
     if (now - lastSent.current < 8000) return;
     lastSent.current = now;
     updateJobLocation(jobData.id, lat, lng);
-  };
+  }, [jobData?.id]);
 
   useEffect(() => {
     let locationSubscription: any;
@@ -75,7 +84,7 @@ const snapPoints = useMemo(() => androidHeight, []);
         locationSubscription.remove();
       }
     };
-  }, [id, jobData]);
+  }, [id, jobData, maybeUpdateLocation, setLocation, setOnDuty]);
 
   useEffect(() => {
     if (!id) return;
@@ -90,6 +99,30 @@ const snapPoints = useMemo(() => androidHeight, []);
       if (!data || error) {
         Alert.alert("Job not found");
         router.replace("/(app)/(tabs)");
+        return;
+      }
+
+      if (data.status === "ARRIVED") {
+        router.replace({
+          pathname: "/(app)/(jobs)/inspect",
+          params: { id: data.id },
+        });
+        return;
+      }
+
+      if (data.status === "IN_PROGRESS") {
+        router.replace({
+          pathname: "/(app)/(jobs)/work-in-progress",
+          params: { id: data.id },
+        });
+        return;
+      }
+
+      if (data.status === "COMPLETED") {
+        router.replace({
+          pathname: "/(app)/(jobs)/payment-qr",
+          params: { id: data.id },
+        });
         return;
       }
 
@@ -116,18 +149,33 @@ const snapPoints = useMemo(() => androidHeight, []);
           const job = payload.new;
           setJobData(job);
 
-          if (job.status === "CANCELLED") {
-            Alert.alert("Customer cancelled the job");
-            router.replace("/(app)/(tabs)/temp");
+          if (CANCELLED_STATUSES.includes(job.status)) {
+            Alert.alert("This job is no longer active");
+            router.replace("/(app)/(tabs)");
+            return;
+          }
+
+          if (job.status === "ARRIVED") {
+            router.replace({
+              pathname: "/(app)/(jobs)/inspect",
+              params: { id: job.id },
+            });
+            return;
+          }
+
+          if (job.status === "IN_PROGRESS") {
+            router.replace({
+              pathname: "/(app)/(jobs)/work-in-progress",
+              params: { id: job.id },
+            });
+            return;
           }
 
           if (job.status === "COMPLETED") {
-            Alert.alert("Job finished");
-            router.replace("/(app)/(tabs)/temp");
-          }
-          if (job.status === "EXPIRED") {
-            Alert.alert("Job expired");
-            router.replace("/(app)/(tabs)/temp");
+            router.replace({
+              pathname: "/(app)/(jobs)/payment-qr",
+              params: { id: job.id },
+            });
           }
         },
       )
@@ -194,7 +242,27 @@ const snapPoints = useMemo(() => androidHeight, []);
         <BottomSheetScrollView showsVerticalScrollIndicator={false}>
           <ArrivalSheet
             job={jobData}
-            onPress={() => setOtpModalVisible(true)}
+            onPress={() => {
+              if (jobData.status === "ASSIGNED") {
+                setOtpModalVisible(true);
+                return;
+              }
+
+              if (jobData.status === "ARRIVED") {
+                router.push({
+                  pathname: "/(app)/(jobs)/inspect",
+                  params: { id: jobData.id },
+                });
+                return;
+              }
+
+              if (jobData.status === "IN_PROGRESS") {
+                router.push({
+                  pathname: "/(app)/(jobs)/work-in-progress",
+                  params: { id: jobData.id },
+                });
+              }
+            }}
           />
         </BottomSheetScrollView>
       </BottomSheet>

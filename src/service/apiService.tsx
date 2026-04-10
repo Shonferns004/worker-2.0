@@ -21,9 +21,51 @@ export const getMyJobs = async () => {
   }
 };
 
+export const getWorkerJobHistory = async () => {
+  const id = await getUserId();
+
+  try {
+    const res = await api.get(`/jobs/worker/my/${id}`);
+    return res.data.jobs ?? [];
+  } catch (err: any) {
+    console.log("GET JOB HISTORY ERROR:", err?.response?.data || err.message);
+    throw err;
+  }
+};
+
+export const getMyWithdrawalRequests = async () => {
+  try {
+    const res = await api.get("/worker/withdrawals");
+    return res.data.requests ?? [];
+  } catch (err: any) {
+    console.log(
+      "GET WITHDRAWAL REQUESTS ERROR:",
+      err?.response?.data || err.message,
+    );
+    throw err;
+  }
+};
+
+export const createWithdrawalRequest = async ({
+  amount,
+  note,
+}: {
+  amount: number;
+  note?: string;
+}) => {
+  try {
+    const res = await api.post("/worker/withdrawals", { amount, note });
+    return res.data;
+  } catch (err: any) {
+    console.log(
+      "CREATE WITHDRAWAL REQUEST ERROR:",
+      err?.response?.data || err.message,
+    );
+    throw err;
+  }
+};
+
 export const acceptJobOffer = async (jobId: string) => {
-  // console.log(jobId)
-  const uid = await getUserId();
   console.log(jobId);
   try {
     const res = await api.patch(`/jobs/accept/${jobId}`);
@@ -46,7 +88,7 @@ export const updateJobStatus = async (jobId: string, status: string) => {
 
   console.log(jobId);
   try {
-    const res = await api.patch(`/jobs/${uid}/${jobId}/status`, {
+    await api.patch(`/jobs/${uid}/${jobId}/status`, {
       status,
     });
     return true;
@@ -63,19 +105,38 @@ export const sendLocationToServer = async (
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return;
 
-  await supabase
-    .from("workers")
-    .update({
-      latitude,
-      longitude,
-    })
-    .eq("id", user.user.id);
+  await api.post("/worker/location", {
+    latitude,
+    longitude,
+  });
+};
+
+export const goOnline = async () => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  if (!token) {
+    console.log("NO TOKEN FOUND");
+    return;
+  }
+
+  console.log("REGISTERING WORKER ONLINE");
+
+  await api.post(
+    "/worker/online",
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
 };
 
 export const toogleOndutyButton = async (onDuty: any) => {
   try {
     await api.post(`/worker/duty`, { onDuty });
-  } catch (e) {
+  } catch {
     console.log("On duty toggle failed");
   }
 };
@@ -123,3 +184,15 @@ export const verifyTaskType = async (jobId: string, actualSize: string) => {
   }
 };
 
+export const completeActiveJob = async (
+  jobId: string,
+  paymentMethod: "CASH" | "ONLINE",
+) => {
+  try {
+    await api.patch(`/jobs/${jobId}/complete`, { paymentMethod });
+    return true;
+  } catch (err) {
+    console.log("Complete job failed", err);
+    return false;
+  }
+};
